@@ -1,9 +1,11 @@
 package br.com.rotavyn.shipment;
 
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ShipmentRulesTest {
-    public static void main(String[] args) {
+    @Test void rulesAndTenancy() {
         var tenantA = UUID.randomUUID();
         var tenantB = UUID.randomUUID();
         var actor = new Actor(UUID.randomUUID(), tenantA, Role.DISPATCHER);
@@ -17,10 +19,10 @@ public class ShipmentRulesTest {
         fails(() -> rules.next(ShipmentStatus.CREATED, ShipmentEventType.DELIVER));
         fails(() -> rules.requireTenant(tenantB, actor));
         rules.requireTenant(tenantA, actor);
-        System.out.println("ShipmentRulesTest: OK");
+        assertThrows(IllegalArgumentException.class, () -> rules.next(ShipmentStatus.CREATED, ShipmentEventType.DELIVER));
     }
 
-    private static void expect(boolean value) { if (!value) throw new AssertionError(); }
+    private static void expect(boolean value) { assertTrue(value); }
     private static void fails(Runnable action) {
         try { action.run(); throw new AssertionError("expected failure"); }
         catch (IllegalArgumentException expected) { /* correct */ }
