@@ -6,7 +6,7 @@
 
 Rotavyn é uma plataforma de logística multiempresa em desenvolvimento. O projeto começa pela operação de transportadoras: organizar remessas, acompanhar entregas e, em etapas futuras, apoiar o tratamento de ocorrências com recomendações de IA revisadas por pessoas.
 
-> **Estágio atual:** primeiro fluxo de remessas implementado na API. Este repositório ainda não representa um produto pronto para uso em produção.
+> **Estágio atual:** fluxo de remessas e frota implementado na API, com painel web em desenvolvimento. Este repositório ainda não representa um produto pronto para uso em produção.
 
 ## O que já funciona
 
@@ -22,7 +22,7 @@ Rotavyn é uma plataforma de logística multiempresa em desenvolvimento. O proje
 | --- | --- | --- |
 | Backend | Java 21, Spring Boot, Spring Security, JDBC e Bean Validation | Operação completa, permissões persistentes e auditoria |
 | Dados | PostgreSQL 17 e Flyway | Evolução do modelo e auditoria de operações |
-| Interface | — | React e TypeScript |
+| Interface | React, TypeScript e Vite: painel de operações, frota, remessas e histórico | Visão do motorista e recomendações |
 | IA | — | Recomendações de ocorrências com decisão humana |
 | Qualidade | JUnit, MockMvc e GitHub Actions | Testes do fluxo operacional completo |
 
@@ -30,7 +30,7 @@ O backend segue a direção de um monólito modular. Nesta fase, estão implemen
 
 ## Executar localmente
 
-**Pré-requisitos:** Java 21, Maven e Docker com Docker Compose.
+**Pré-requisitos:** Java 21, Maven, Node.js 22 ou superior e Docker com Docker Compose.
 
 1. Clone o repositório e crie o arquivo de configuração:
 
@@ -70,6 +70,16 @@ O backend segue a direção de um monólito modular. Nesta fase, estão implemen
    ```
 
    A API fica em `http://localhost:8080`. O health check está em `/actuator/health`.
+
+4. Em outro terminal, inicie o frontend:
+
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+   Acesse `http://localhost:5173` e entre com um dos operadores configurados no `.env`. A interface usa a API em `http://localhost:8080` por padrão; para outro endereço, defina `VITE_API_URL`. O backend aceita a origem `http://localhost:5173` por padrão; para outra origem, defina `ROTAVYN_FRONTEND_ORIGIN` antes de iniciar o backend.
 
 ## Exemplo da API
 
@@ -114,10 +124,10 @@ cd backend
 mvn verify
 ```
 
-O [pipeline Backend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/backend-ci.yml) executa o mesmo comando com Java 21 e PostgreSQL 17 em cada atualização da branch principal e em pull requests.
+O [Backend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/backend-ci.yml) executa os testes com Java 21 e PostgreSQL 17. O [Frontend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/frontend-ci.yml) executa a compilação TypeScript e o build de produção.
 
 ## Limites atuais e próximos passos
 
-A autenticação usa HTTP Basic e operadores configurados por variáveis de ambiente **somente para demonstração local**. Antes de uso real, são necessários usuários persistentes, autorização por papel, gerenciamento seguro de credenciais e revisão de segurança. Ainda faltam a gestão completa de frota, permissões por papel e ocorrências; a interface React; e a integração com IA. Nenhuma recomendação automatizada está ativa nesta versão.
+A autenticação usa HTTP Basic e operadores configurados por variáveis de ambiente **somente para demonstração local**. Antes de uso real, são necessários usuários persistentes, autorização por papel, gerenciamento seguro de credenciais e revisão de segurança. Ainda faltam gestão completa de frota, permissões por papel, ocorrências, visão específica de motorista e integração com IA. A interface atual é destinada a operadores em ambiente local de demonstração. Nenhuma recomendação automatizada está ativa nesta versão.
 
 O roteiro aprovado está na [especificação de produto](docs/superpowers/specs/2026-09-23-rotavyn-design.md) e no [plano de implementação](docs/superpowers/plans/2026-09-23-rotavyn-mvp.md). A meta é concluir o ciclo operacional de uma remessa e depois adicionar recomendações com justificativa e aprovação humana.
