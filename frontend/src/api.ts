@@ -6,6 +6,8 @@ export type Shipment = {
   status: string; driverId: string | null; vehicleId: string | null;
 };
 export type ShipmentEvent = { id: string; eventType: string; occurredAt: string; note: string | null };
+export type Incident = { shipmentId: string; trackingCode: string; status: string; promisedAt: string; reason: string };
+export type Recommendation = { id: string; shipmentId: string; reason: string; recommendation: string; rationale: string; provider: string; status: string; createdAt: string; decidedAt: string | null };
 export type Credentials = { username: string; password: string };
 const base = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
