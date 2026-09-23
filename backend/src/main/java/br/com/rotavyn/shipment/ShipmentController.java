@@ -46,10 +46,21 @@ public class ShipmentController {
         @NotNull OffsetDateTime promisedAt) {}
 
     public record Shipment(UUID id, String trackingCode, String senderName, String recipientName,
-        String destinationAddress, String destinationCountry, OffsetDateTime promisedAt, ShipmentStatus status) {}
+        String destinationAddress, String destinationCountry, OffsetDateTime promisedAt, ShipmentStatus status,
+        UUID driverId, UUID vehicleId) {}
 
     public record AppendEvent(@NotNull ShipmentEventType eventType,
         @NotBlank @Size(max = 120) String idempotencyKey, String note) {}
+
+    public record Assignment(@NotNull UUID driverId, @NotNull UUID vehicleId,
+        @NotBlank @Size(max = 120) String idempotencyKey, String note) {}
+
+    @PostMapping("/{id}/assignment")
+    public ResponseEntity<ShipmentEventService.Event> assign(@PathVariable UUID id,
+        @Valid @RequestBody Assignment request, Authentication authentication) {
+        return ResponseEntity.ok(events.assign(id, request.driverId(), request.vehicleId(),
+            request.idempotencyKey(), request.note(), authentication));
+    }
 
     @PostMapping("/{id}/events")
     public ResponseEntity<ShipmentEventService.Event> append(@PathVariable UUID id,
@@ -74,13 +85,13 @@ public class ShipmentController {
             request.destinationAddress(), request.destinationCountry(), request.promisedAt());
         return ResponseEntity.created(URI.create("/api/v1/shipments/" + id))
             .body(new Shipment(id, request.trackingCode(), request.senderName(), request.recipientName(),
-                request.destinationAddress(), request.destinationCountry(), request.promisedAt(), ShipmentStatus.CREATED));
+                request.destinationAddress(), request.destinationCountry(), request.promisedAt(), ShipmentStatus.CREATED, null, null));
     }
 
     @GetMapping
     public List<Shipment> list(Authentication authentication) {
         return jdbc.query("""
-            SELECT id,tracking_code,sender_name,recipient_name,destination_address,destination_country,promised_at,status
+            SELECT id,tracking_code,sender_name,recipient_name,destination_address,destination_country,promised_at,status,driver_id,vehicle_id
             FROM shipment WHERE tenant_id=? ORDER BY promised_at,id
             """, (rs, row) -> mapShipment(rs), tenants.tenantFor(authentication.getName()));
     }
@@ -88,7 +99,7 @@ public class ShipmentController {
     @GetMapping("/{id}")
     public Shipment get(@PathVariable UUID id, Authentication authentication) {
         var results = jdbc.query("""
-            SELECT id,tracking_code,sender_name,recipient_name,destination_address,destination_country,promised_at,status
+            SELECT id,tracking_code,sender_name,recipient_name,destination_address,destination_country,promised_at,status,driver_id,vehicle_id
             FROM shipment WHERE tenant_id=? AND id=?
             """, (rs, row) -> mapShipment(rs), tenants.tenantFor(authentication.getName()), id);
         if (results.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
@@ -99,7 +110,8 @@ public class ShipmentController {
         return new Shipment(rs.getObject("id", UUID.class), rs.getString("tracking_code"),
             rs.getString("sender_name"), rs.getString("recipient_name"), rs.getString("destination_address"),
             rs.getString("destination_country"), rs.getObject("promised_at", OffsetDateTime.class),
-            ShipmentStatus.valueOf(rs.getString("status")));
+            ShipmentStatus.valueOf(rs.getString("status")), rs.getObject("driver_id", UUID.class),
+            rs.getObject("vehicle_id", UUID.class));
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
