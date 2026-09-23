@@ -1,0 +1,37 @@
+name: Backend CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: rotavyn
+          POSTGRES_USER: rotavyn
+          POSTGRES_PASSWORD: test-db-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rotavyn" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DB_PASSWORD: test-db-password
+      ROTAVYN_DEMO_USER_A: operator-a
+      ROTAVYN_DEMO_PASSWORD_A: superlong-test-password-a
+      ROTAVYN_DEMO_TENANT_A: 00000000-0000-0000-0000-00000000000a
+      ROTAVYN_DEMO_USER_B: operator-b
+      ROTAVYN_DEMO_PASSWORD_B: superlong-test-password-b
+      ROTAVYN_DEMO_TENANT_B: 00000000-0000-0000-0000-00000000000b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: mvn -B verify
+        working-directory: backend
