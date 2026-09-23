@@ -28,6 +28,40 @@ public class ShipmentEventService {
 
     @Transactional
     public Event append(UUID shipmentId, ShipmentEventType type, String key, String note, Authentication auth) {
+        if (type == ShipmentEventType.ASSIGN)
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Use the assignment endpoint with driver and vehicle");
+        return appendInternal(shipmentId, type, key, note, auth);
+    }
+
+    @Transactional
+    public Event assign(UUID shipmentId, UUID driverId, UUID vehicleId, String key, String note, Authentication auth) {
+        UUID tenant = tenants.tenantFor(auth.getName());
+        var details = jdbc.query("SELECT status,driver_id,vehicle_id FROM shipment WHERE tenant_id=? AND id=? FOR UPDATE",
+            (rs, row) -> new AssignmentState(ShipmentStatus.valueOf(rs.getString(1)),
+                rs.getObject(2, UUID.class), rs.getObject(3, UUID.class)), tenant, shipmentId);
+        if (details.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Shipment not found");
+        var existing = jdbc.query("SELECT id,shipment_id,event_type,occurred_at,note,idempotency_key FROM shipment_event WHERE tenant_id=? AND idempotency_key=?",
+            (rs, row) -> map(rs), tenant, key);
+        if (!existing.isEmpty()) {
+            var event = existing.getFirst();
+            if (!event.shipmentId().equals(shipmentId) || event.eventType() != ShipmentEventType.ASSIGN
+                || !driverId.equals(details.getFirst().driverId()) || !vehicleId.equals(details.getFirst().vehicleId()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already used");
+            return event;
+        }
+        if (details.getFirst().status() != ShipmentStatus.CREATED)
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Shipment cannot be assigned in this status");
+        Integer drivers = jdbc.queryForObject("SELECT count(*) FROM driver WHERE tenant_id=? AND id=?", Integer.class, tenant, driverId);
+        Integer vehicles = jdbc.queryForObject("SELECT count(*) FROM vehicle WHERE tenant_id=? AND id=?", Integer.class, tenant, vehicleId);
+        if (drivers == null || drivers == 0 || vehicles == null || vehicles == 0)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver or vehicle not found");
+        jdbc.update("UPDATE shipment SET driver_id=?,vehicle_id=? WHERE tenant_id=? AND id=?", driverId, vehicleId, tenant, shipmentId);
+        return appendInternal(shipmentId, ShipmentEventType.ASSIGN, key, note, auth);
+    }
+
+    private record AssignmentState(ShipmentStatus status, UUID driverId, UUID vehicleId) {}
+
+    private Event appendInternal(UUID shipmentId, ShipmentEventType type, String key, String note, Authentication auth) {
         UUID tenant = tenants.tenantFor(auth.getName());
         // Serializa as alterações de uma remessa para proteger status e histórico na mesma transação.
         var current = jdbc.query("SELECT status FROM shipment WHERE tenant_id=? AND id=? FOR UPDATE",
