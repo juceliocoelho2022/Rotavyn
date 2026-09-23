@@ -14,7 +14,7 @@ Rotavyn é uma plataforma de logística multiempresa em desenvolvimento. O proje
 - Isolamento por empresa: o servidor identifica a empresa pelo operador autenticado; consultas e códigos de rastreamento são restritos ao respectivo tenant.
 - Validação dos dados de entrada, `201` na criação, `400` para dados inválidos, `401` sem autenticação, `404` para remessa inacessível ou inexistente e `409` para código de rastreamento duplicado na mesma empresa.
 - Migração inicial do PostgreSQL com Flyway, cadastro de frota e provisionamento de duas empresas fictícias para demonstração.
-- Testes automatizados de autenticação, validação, isolamento entre empresas, idempotência e regras de transição; pipeline de CI com PostgreSQL.
+- Testes automatizados de autenticação, validação, isolamento entre empresas, idempotência, regras de transição e decisão de sugestões; pipeline de CI com PostgreSQL.
 
 ## Tecnologias e arquitetura
 
@@ -22,8 +22,8 @@ Rotavyn é uma plataforma de logística multiempresa em desenvolvimento. O proje
 | --- | --- | --- |
 | Backend | Java 21, Spring Boot, Spring Security, JDBC e Bean Validation | Operação completa, permissões persistentes e auditoria |
 | Dados | PostgreSQL 17 e Flyway | Evolução do modelo e auditoria de operações |
-| Interface | React, TypeScript e Vite: painel de operações, frota, remessas e histórico | Visão do motorista e recomendações |
-| IA | — | Recomendações de ocorrências com decisão humana |
+| Interface | React, TypeScript e Vite: painel de operações, frota, remessas, histórico e ocorrências | Visão do motorista |
+| Assistência | Sugestões determinísticas locais com decisão humana | Adaptador de IA com revisão humana |
 | Qualidade | JUnit, MockMvc e GitHub Actions | Testes do fluxo operacional completo |
 
 O backend segue a direção de um monólito modular. Nesta fase, estão implementados identidade de demonstração, frota e remessas.
@@ -109,6 +109,10 @@ curl -u "$ROTAVYN_DEMO_USER_A:$ROTAVYN_DEMO_PASSWORD_A" \
 | `POST` | `/api/v1/shipments/{id}/assignment` | Vincula motorista e veículo e registra `ASSIGN` (`200`) |
 | `POST` | `/api/v1/shipments/{id}/events` | Registra evento e avança o status (`200` ou `422`) |
 | `GET` | `/api/v1/shipments/{id}/events` | Consulta o histórico da empresa (`200` ou `404`) |
+| `GET` | `/api/v1/incidents` | Lista atrasos e ocorrências ativos da empresa |
+| `POST` | `/api/v1/shipments/{id}/recommendations` | Cria uma sugestão determinística para um caso ativo |
+| `GET` | `/api/v1/recommendations/{shipmentId}` | Lista as sugestões da remessa |
+| `POST` | `/api/v1/recommendations/{id}/decision` | Aceita ou descarta a sugestão |
 | `GET` | `/actuator/health` | Verifica a saúde da aplicação |
 
 `destinationCountry` aceita duas letras maiúsculas; `promisedAt` usa data e hora ISO 8601 com fuso. A API não aceita `tenantId` no corpo da requisição.
@@ -128,6 +132,6 @@ O [Backend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/ba
 
 ## Limites atuais e próximos passos
 
-A autenticação usa HTTP Basic e operadores configurados por variáveis de ambiente **somente para demonstração local**. Antes de uso real, são necessários usuários persistentes, autorização por papel, gerenciamento seguro de credenciais e revisão de segurança. Ainda faltam gestão completa de frota, permissões por papel, ocorrências, visão específica de motorista e integração com IA. A interface atual é destinada a operadores em ambiente local de demonstração. Nenhuma recomendação automatizada está ativa nesta versão.
+A autenticação usa HTTP Basic e operadores configurados por variáveis de ambiente **somente para demonstração local**. Antes de uso real, são necessários usuários persistentes, autorização por papel, gerenciamento seguro de credenciais e revisão de segurança. Ainda faltam gestão completa de frota, permissões por papel, visão específica de motorista e integração com um provedor de IA. A seção Ocorrências usa **regras determinísticas**, identificadas no retorno como `DETERMINISTIC_DEMO`. Nenhuma chamada a modelo de IA acontece nesta fase. Ao aceitar uma sugestão, o sistema registra uma tarefa de acompanhamento; a decisão não altera o status da remessa. A interface atual é destinada a operadores em ambiente local de demonstração. Nenhuma recomendação automatizada está ativa nesta versão.
 
 O roteiro aprovado está na [especificação de produto](docs/superpowers/specs/2026-09-23-rotavyn-design.md) e no [plano de implementação](docs/superpowers/plans/2026-09-23-rotavyn-mvp.md). A meta é concluir o ciclo operacional de uma remessa e depois adicionar recomendações com justificativa e aprovação humana.
