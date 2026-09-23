@@ -29,10 +29,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class ShipmentController {
     private final JdbcTemplate jdbc;
     private final DemoTenants tenants;
+    private final ShipmentEventService events;
 
-    public ShipmentController(JdbcTemplate jdbc, DemoTenants tenants) {
+    public ShipmentController(JdbcTemplate jdbc, DemoTenants tenants, ShipmentEventService events) {
         this.jdbc = jdbc;
         this.tenants = tenants;
+        this.events = events;
     }
 
     public record CreateShipment(
@@ -45,6 +47,21 @@ public class ShipmentController {
 
     public record Shipment(UUID id, String trackingCode, String senderName, String recipientName,
         String destinationAddress, String destinationCountry, OffsetDateTime promisedAt, ShipmentStatus status) {}
+
+    public record AppendEvent(@NotNull ShipmentEventType eventType,
+        @NotBlank @Size(max = 120) String idempotencyKey, String note) {}
+
+    @PostMapping("/{id}/events")
+    public ResponseEntity<ShipmentEventService.Event> append(@PathVariable UUID id,
+        @Valid @RequestBody AppendEvent request, Authentication authentication) {
+        var event = events.append(id, request.eventType(), request.idempotencyKey(), request.note(), authentication);
+        return ResponseEntity.ok(event);
+    }
+
+    @GetMapping("/{id}/events")
+    public List<ShipmentEventService.Event> history(@PathVariable UUID id, Authentication authentication) {
+        return events.history(id, authentication);
+    }
 
     @PostMapping
     public ResponseEntity<Shipment> create(@Valid @RequestBody CreateShipment request, Authentication authentication) {
