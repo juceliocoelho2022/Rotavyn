@@ -34,7 +34,7 @@ public class SecurityConfig {
         if (passA.length() < 16 || passB.length() < 16) throw new IllegalArgumentException("Demo passwords require 16 characters");
         var encoder = new BCryptPasswordEncoder();
         return new InMemoryUserDetailsManager(
-            User.withUsername(userA).password(encoder.encode(passA)).roles("DISPATCHER").build(),
-            User.withUsername(userB).password(encoder.encode(passB)).roles("DISPATCHER").build());
+            User.withUsername(userA).password("{bcrypt}" + encoder.encode(passA)).roles("DISPATCHER").build(),
+            User.withUsername(userB).password("{bcrypt}" + encoder.encode(passB)).roles("DISPATCHER").build());
     }
 }
