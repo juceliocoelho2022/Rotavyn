@@ -2,30 +2,115 @@
 
 **Inteligência para mover o mundo.**
 
-Plataforma de logística para múltiplas empresas, começando pelo fluxo de transportadoras. O objetivo da primeira versão é cadastrar remessas, atribuir motoristas e veículos, acompanhar eventos e oferecer recomendações para ocorrências com revisão humana.
+[![Backend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/backend-ci.yml)
 
-## Estado atual
+Rotavyn é uma plataforma de logística multiempresa em desenvolvimento. O projeto começa pela operação de transportadoras: organizar remessas, acompanhar entregas e, em etapas futuras, apoiar o tratamento de ocorrências com recomendações de IA revisadas por pessoas.
 
-Primeiro fluxo executável: API Java 21/Spring Boot para criar, listar e consultar remessas, com PostgreSQL, migrações Flyway, dois operadores de demonstração e isolamento por empresa. O CI usa PostgreSQL e executa testes de regras, autenticação e isolamento. A autenticação HTTP Basic é apenas para desenvolvimento; ainda não há frontend nem agentes de IA.
+> **Estágio atual:** primeiro fluxo de remessas implementado na API. Este repositório ainda não representa um produto pronto para uso em produção.
 
-### Iniciar localmente
+## O que já funciona
 
-1. Instale Java 21, Maven e Docker Compose.
-2. Copie `.env.example` para `.env` e troque as três senhas. Carregue as variáveis no terminal: `set -a; source .env; set +a`.
-3. Execute `docker compose up -d` e depois `cd backend && mvn spring-boot:run`.
-4. Exemplo: `curl -u "$ROTAVYN_DEMO_USER_A:$ROTAVYN_DEMO_PASSWORD_A" http://localhost:8080/api/v1/shipments`.
+- Cadastro, listagem e consulta de remessas pela API REST.
+- Isolamento por empresa: o servidor identifica a empresa pelo operador autenticado; consultas e códigos de rastreamento são restritos ao respectivo tenant.
+- Validação dos dados de entrada, `201` na criação, `400` para dados inválidos, `401` sem autenticação, `404` para remessa inacessível ou inexistente e `409` para código de rastreamento duplicado na mesma empresa.
+- Migração inicial do PostgreSQL com Flyway e provisionamento de duas empresas fictícias para demonstração.
+- Testes automatizados de autenticação, validação, isolamento entre empresas e regras de transição; pipeline de CI com PostgreSQL.
 
-`POST /api/v1/shipments` aceita `trackingCode`, `senderName`, `recipientName`, `destinationAddress`, `destinationCountry` (código de duas letras) e `promisedAt` (data ISO 8601). `GET /api/v1/shipments/{id}` e a listagem limitam os dados ao operador autenticado. Os UUIDs de demonstração são cadastrados ao iniciar. Para verificar: `cd backend && mvn verify` com o banco ativo.
+## Tecnologias e arquitetura
 
-## Arquitetura prevista
+| Camada | Implementado | Planejado |
+| --- | --- | --- |
+| Backend | Java 21, Spring Boot, Spring Security, JDBC e Bean Validation | Operação completa, permissões persistentes e auditoria |
+| Dados | PostgreSQL 17 e Flyway | Histórico de eventos e evolução do modelo |
+| Interface | — | React e TypeScript |
+| IA | — | Recomendações de ocorrências com decisão humana |
+| Qualidade | JUnit, MockMvc e GitHub Actions | Testes do fluxo operacional completo |
 
-- Backend: Java 21 e Spring Boot, monólito modular.
-- Banco: PostgreSQL 17, com isolamento de dados por empresa.
-- Frontend: React e TypeScript.
-- IA: recomendações para atrasos e ocorrências, sujeitas à decisão de um operador.
+O backend segue a direção de um monólito modular. Nesta fase, estão implementados os pacotes de identidade de demonstração e remessas. O modelo SQL também prevê motoristas, veículos e eventos, mas suas APIs ainda não estão disponíveis.
 
-Leia a [especificação](docs/superpowers/specs/2026-09-23-rotavyn-design.md) e o [plano](docs/superpowers/plans/2026-09-23-rotavyn-mvp.md). O arquivo `compose.yml` inicia somente o banco de dados e requer `DB_PASSWORD` no ambiente ou em um arquivo `.env` local.
+## Executar localmente
 
-## Próximo marco
+**Pré-requisitos:** Java 21, Maven e Docker com Docker Compose.
 
-Adicionar eventos de remessa, controle de permissões persistente, interface React e recomendações de IA com revisão humana antes de aceitar dados reais.
+1. Clone o repositório e crie o arquivo de configuração:
+
+   ```bash
+   git clone https://github.com/juceliocoelho2022/Rotavyn.git
+   cd Rotavyn
+   cp .env.example .env
+   ```
+
+   No PowerShell, use `Copy-Item .env.example .env` no lugar de `cp`. Troque `DB_PASSWORD`, `ROTAVYN_DEMO_PASSWORD_A` e `ROTAVYN_DEMO_PASSWORD_B` no arquivo `.env`. Não publique esse arquivo.
+
+2. Inicie apenas o banco de dados:
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. Exporte as variáveis do `.env` para o processo do backend. No Bash:
+
+   ```bash
+   set -a
+   source .env
+   set +a
+   cd backend
+   mvn spring-boot:run
+   ```
+
+   No PowerShell, a partir da raiz do repositório:
+
+   ```powershell
+   Get-Content .env | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' } | ForEach-Object {
+       $key, $value = $_ -split '=', 2
+       [Environment]::SetEnvironmentVariable($key, $value, 'Process')
+   }
+   Set-Location backend
+   mvn spring-boot:run
+   ```
+
+   A API fica em `http://localhost:8080`. O health check está em `/actuator/health`.
+
+## Exemplo da API
+
+Os dois operadores definidos no `.env` pertencem a empresas diferentes. Com o backend iniciado, execute no Bash:
+
+```bash
+curl -u "$ROTAVYN_DEMO_USER_A:$ROTAVYN_DEMO_PASSWORD_A" \
+  -H 'Content-Type: application/json' \
+  -d '{"trackingCode":"ROT-2026-001","senderName":"Empresa Exemplo","recipientName":"Cliente Exemplo","destinationAddress":"Rua Exemplo, 100","destinationCountry":"BR","promisedAt":"2030-01-01T12:00:00Z"}' \
+  http://localhost:8080/api/v1/shipments
+```
+
+A resposta contém o `id` e o status `CREATED`. Para listar remessas da empresa autenticada:
+
+```bash
+curl -u "$ROTAVYN_DEMO_USER_A:$ROTAVYN_DEMO_PASSWORD_A" \
+  http://localhost:8080/api/v1/shipments
+```
+
+| Método | Rota | Resultado |
+| --- | --- | --- |
+| `POST` | `/api/v1/shipments` | Cria uma remessa (`201`) |
+| `GET` | `/api/v1/shipments` | Lista as remessas da empresa (`200`) |
+| `GET` | `/api/v1/shipments/{id}` | Consulta uma remessa da empresa (`200` ou `404`) |
+| `GET` | `/actuator/health` | Verifica a saúde da aplicação |
+
+`destinationCountry` aceita duas letras maiúsculas; `promisedAt` usa data e hora ISO 8601 com fuso. A API não aceita `tenantId` no corpo da requisição.
+
+## Testes
+
+Com o PostgreSQL ativo e as variáveis do `.env` carregadas:
+
+```bash
+cd backend
+mvn verify
+```
+
+O [pipeline Backend CI](https://github.com/juceliocoelho2022/Rotavyn/actions/workflows/backend-ci.yml) executa o mesmo comando com Java 21 e PostgreSQL 17 em cada atualização da branch principal e em pull requests.
+
+## Limites atuais e próximos passos
+
+A autenticação usa HTTP Basic e operadores configurados por variáveis de ambiente **somente para demonstração local**. Antes de uso real, são necessários usuários persistentes, autorização por papel, gerenciamento seguro de credenciais e revisão de segurança. Ainda faltam os endpoints de frota, atribuição, eventos e ocorrências; a interface React; e a integração com IA. Nenhuma recomendação automatizada está ativa nesta versão.
+
+O roteiro aprovado está na [especificação de produto](docs/superpowers/specs/2026-09-23-rotavyn-design.md) e no [plano de implementação](docs/superpowers/plans/2026-09-23-rotavyn-mvp.md). A meta é concluir o ciclo operacional de uma remessa e depois adicionar recomendações com justificativa e aprovação humana.
