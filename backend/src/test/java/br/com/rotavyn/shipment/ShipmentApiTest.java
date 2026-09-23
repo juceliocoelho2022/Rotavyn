@@ -87,6 +87,56 @@ class ShipmentApiTest {
             .andExpect(status().isNotFound());
     }
 
+    @Test void dispatchesWithTenantFleetAndRecordsAssignment() throws Exception {
+        var a = httpBasic("operator-a", "superlong-test-password-a");
+        var b = httpBasic("operator-b", "superlong-test-password-b");
+        String driverJson = mvc.perform(post("/api/v1/drivers").with(a)
+                .contentType("application/json").content("{\"displayName\":\"Ana Motorista\"}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String vehicleJson = mvc.perform(post("/api/v1/vehicles").with(a)
+                .contentType("application/json").content("{\"plate\":\"" + UUID.randomUUID().toString().substring(0, 8) + "\"}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String driverId = mapper.readTree(driverJson).get("id").asText();
+        String vehicleId = mapper.readTree(vehicleJson).get("id").asText();
+        mvc.perform(get("/api/v1/drivers").with(b)).andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.id=='" + driverId + "')]").isEmpty());
+        mvc.perform(get("/api/v1/vehicles").with(b)).andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.id=='" + vehicleId + "')]").isEmpty());
+        String shipment = mvc.perform(post("/api/v1/shipments").with(a).contentType("application/json")
+                .content("""
+                    {"trackingCode":"R-%s","senderName":"Origem","recipientName":"Destino",
+                     "destinationAddress":"Rua Exemplo 1","destinationCountry":"BR",
+                     "promisedAt":"2030-01-01T12:00:00Z"}
+                    """.formatted(UUID.randomUUID())))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String id = mapper.readTree(shipment).get("id").asText();
+        String url = "/api/v1/shipments/" + id;
+        mvc.perform(post(url + "/events").with(a).contentType("application/json")
+                .content("""
+                    {"eventType":"ASSIGN","idempotencyKey":"%s"}
+                    """.formatted(UUID.randomUUID())))
+            .andExpect(status().isUnprocessableEntity());
+        String assignment = """
+            {"driverId":"%s","vehicleId":"%s","idempotencyKey":"%s"}
+            """.formatted(driverId, vehicleId, UUID.randomUUID());
+        mvc.perform(post(url + "/assignment").with(b).contentType("application/json").content(assignment))
+            .andExpect(status().isNotFound());
+        String foreignVehicle = """
+            {"driverId":"%s","vehicleId":"%s","idempotencyKey":"%s"}
+            """.formatted(driverId, UUID.randomUUID(), UUID.randomUUID());
+        mvc.perform(post(url + "/assignment").with(a).contentType("application/json").content(foreignVehicle))
+            .andExpect(status().isNotFound());
+        mvc.perform(post(url + "/assignment").with(a).contentType("application/json").content(assignment))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.eventType").value("ASSIGN"));
+        mvc.perform(post(url + "/assignment").with(a).contentType("application/json").content(assignment))
+            .andExpect(status().isOk());
+        mvc.perform(get(url).with(a)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("ASSIGNED"))
+            .andExpect(jsonPath("$.driverId").value(driverId))
+            .andExpect(jsonPath("$.vehicleId").value(vehicleId));
+        mvc.perform(get(url + "/events").with(a)).andExpect(jsonPath("$.length()").value(1));
+    }
+
     @Test void requiresAuthenticationAndValidInput() throws Exception {
         mvc.perform(get("/api/v1/shipments")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/shipments").with(httpBasic("operator-a","superlong-test-password-a"))
